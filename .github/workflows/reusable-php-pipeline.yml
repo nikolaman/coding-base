@@ -145,7 +145,7 @@ jobs:
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ steps.build.outputs.digest }}
+          image: ghcr.io/${{ github.repository }}/php-example@${{ steps.build.outputs.digest }}
           format: spdx-json
           output-file: sbom-php.spdx.json
       - name: Upload SBOM
