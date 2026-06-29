@@ -19,3 +19,9 @@
 ### Changed
 
 - fix: использовать digest образа для генерации SBOM в CI
+
+## [1.0.3] - 2026-06-29
+
+### Changed
+
+- fix: указать полный image@digest для SBOM в CI
