@@ -6,35 +6,30 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
 jobs:
-  ci:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  php:
+    name: PHP Pipeline
+    uses: ./.github/workflows/reusable-php-pipeline.yml
+    with:
+      working-directory: examples/php
+      coverage-threshold: 80
+      run-build: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    secrets: inherit
 
-      # Раскомментируй и адаптируй под стек проекта:
-
-      # --- Node.js ---
-      # - uses: actions/setup-node@v4
-      #   with:
-      #     node-version: '20'
-      #     cache: 'npm'
-      # - run: npm ci
-      # - run: npm run lint
-      # - run: npm test
-
-      # --- Python ---
-      # - uses: actions/setup-python@v5
-      #   with:
-      #     python-version: '3.12'
-      # - run: pip install -r requirements.txt
-      # - run: pytest
-
-      # --- Go ---
-      # - uses: actions/setup-go@v5
-      #   with:
-      #     go-version: '1.22'
-      # - run: go test ./...
-
-      - name: Placeholder — настрой CI под свой стек
-        run: echo "CI template ready. Uncomment steps above."
+  python:
+    name: Python Pipeline
+    uses: ./.github/workflows/reusable-python-pipeline.yml
+    with:
+      working-directory: examples/python
+      coverage-threshold: 80
+      run-build: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    secrets: inherit

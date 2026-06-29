@@ -1,0 +1,25 @@
+#!/bin/sh
+# Проверка формата сообщения коммита (Conventional Commits)
+
+MSG_FILE="$1"
+FIRST_LINE=$(head -n 1 "$MSG_FILE")
+
+case "$FIRST_LINE" in
+  Merge\ *|"Release "*" [skip release]"|Revert\ *)
+    exit 0
+    ;;
+esac
+
+if ! printf '%s\n' "$FIRST_LINE" | grep -qE '^(feat|fix|chore|docs|refactor|test|style)(\([^)]+\))?!?: .+'; then
+  echo "Коммит отклонён: нужен префикс Conventional Commits." >&2
+  echo "" >&2
+  echo "  fix: описание     — багфикс (patch)" >&2
+  echo "  feat: описание    — новая функция (minor)" >&2
+  echo "  feat!: описание   — breaking change (major)" >&2
+  echo "  chore: описание   — прочее (patch)" >&2
+  echo "" >&2
+  echo "Сейчас: $FIRST_LINE" >&2
+  exit 1
+fi
+
+exit 0

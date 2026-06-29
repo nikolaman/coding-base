@@ -6,8 +6,9 @@ alwaysApply: true
 # Инфраструктура и операции
 
 ## CI/CD
-- Даже pet-проекты: `.github/workflows/ci.yml` — lint, test, build.
-- PR/merge только при зелёном CI.
+- Pipeline: `docs/ci-cd/README.md`, ADR-0001
+- Версионирование: `VERSION`, `CHANGELOG.md`, ADR-0002, workflow `release.yml`
+- Коммиты: Conventional Commits (`fix:`, `feat:`, `chore:`) — hook `.githooks/commit-msg`
 
 ## Docker
 - Локальное окружение воспроизводимо через `docker-compose.yml`.

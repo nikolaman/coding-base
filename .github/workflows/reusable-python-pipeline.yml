@@ -1,0 +1,148 @@
+name: Reusable Python Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Каталог Python-проекта
+        required: false
+        type: string
+        default: examples/python
+      coverage-threshold:
+        description: Минимальный порог покрытия
+        required: false
+        type: number
+        default: 80
+      run-build:
+        description: Собирать Docker-образ
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      image-tag:
+        description: Тег собранного образа
+        value: ${{ jobs.build.outputs.image-tag }}
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: false
+
+jobs:
+  lint:
+    name: Python / Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+        with:
+          working-directory: ${{ inputs.working-directory }}
+      - run: mkdir -p build
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: black --check .
+
+  static-analysis:
+    name: Python / Static Analysis
+    runs-on: ubuntu-latest
+    needs: lint
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+        with:
+          working-directory: ${{ inputs.working-directory }}
+      - run: mypy src
+
+  test:
+    name: Python / Tests
+    runs-on: ubuntu-latest
+    needs: static-analysis
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+        with:
+          working-directory: ${{ inputs.working-directory }}
+      - run: mkdir -p build
+      - run: pytest
+
+  security:
+    name: Python / Security
+    runs-on: ubuntu-latest
+    needs: test
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+        with:
+          working-directory: ${{ inputs.working-directory }}
+      - run: pip-audit -r requirements-dev.txt
+
+  build:
+    name: Python / Build
+    runs-on: ubuntu-latest
+    needs: security
+    if: inputs.run-build
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read VERSION
+        id: ver
+        run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+      - name: Copy VERSION into build context
+        run: cp VERSION "${{ inputs.working-directory }}/VERSION"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/python-example
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.ver.outputs.version }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.working-directory }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/${{ github.repository }}/python-example:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom-python.spdx.json
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-python
+          path: sbom-python.spdx.json
+
+  notify-failure:
+    name: Python / Notify
+    runs-on: ubuntu-latest
+    needs: [lint, static-analysis, test, security]
+    if: failure()
+    steps:
+      - uses: actions/checkout@v4
+      - name: Notify
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          MESSAGE: Python pipeline failed in ${{ github.repository }} (${{ github.ref_name }})
+        run: ./scripts/ci/notify-failure.sh "$MESSAGE"

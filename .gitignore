@@ -1,10 +1,16 @@
 .env
+build/
 backups/
+examples/php/vendor/
+examples/php/build/
+examples/php/VERSION
+examples/python/.venv/
+examples/python/build/
+examples/python/VERSION
 node_modules/
 __pycache__/
 *.pyc
 .DS_Store
 dist/
-build/
 .coverage
 htmlcov/

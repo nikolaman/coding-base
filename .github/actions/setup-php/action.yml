@@ -1,0 +1,36 @@
+name: Setup PHP
+description: Устанавливает PHP и зависимости Composer с кэшированием
+
+inputs:
+  php-version:
+    description: Версия PHP
+    required: false
+    default: "8.3"
+  working-directory:
+    description: Каталог с composer.json
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ inputs.php-version }}
+        coverage: xdebug
+        tools: composer:v2
+
+    - name: Cache Composer
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ inputs.working-directory }}/vendor
+          ~/.composer/cache
+        key: composer-${{ runner.os }}-${{ hashFiles(format('{0}/composer.lock', inputs.working-directory)) }}
+        restore-keys: |
+          composer-${{ runner.os }}-
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: composer install --no-interaction --prefer-dist

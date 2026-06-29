@@ -1,0 +1,140 @@
+# GitLab CI — шаблон pipeline для PHP/Python
+# Скопируй в корень проекта и адаптируй paths
+
+stages:
+  - lint
+  - analyse
+  - test
+  - security
+  - build
+  - deploy
+  - smoke
+
+variables:
+  COVERAGE_THRESHOLD: "80"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - examples/php/vendor/
+    - .cache/pip/
+
+.php-template: &php-template
+  image: php:8.3-cli
+  before_script:
+    - apt-get update && apt-get install -y unzip git
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    - cd examples/php && composer install --no-interaction --prefer-dist
+
+.python-template: &python-template
+  image: python:3.12-slim
+  before_script:
+    - cd examples/python
+    - pip install -r requirements-dev.txt
+    - pip install -e .
+
+php:lint:
+  stage: lint
+  <<: *php-template
+  script:
+    - composer lint
+
+php:analyse:
+  stage: analyse
+  <<: *php-template
+  needs: [php:lint]
+  script:
+    - composer analyse
+
+php:test:
+  stage: test
+  <<: *php-template
+  needs: [php:analyse]
+  script:
+    - mkdir -p build
+    - composer test -- --coverage-clover build/coverage.xml
+
+php:security:
+  stage: security
+  <<: *php-template
+  needs: [php:test]
+  script:
+    - composer audit
+
+python:lint:
+  stage: lint
+  <<: *python-template
+  script:
+    - ruff check .
+    - ruff format --check .
+    - black --check .
+
+python:analyse:
+  stage: analyse
+  <<: *python-template
+  needs: [python:lint]
+  script:
+    - mypy src
+
+python:test:
+  stage: test
+  <<: *python-template
+  needs: [python:analyse]
+  script:
+    - pytest
+
+python:security:
+  stage: security
+  <<: *python-template
+  needs: [python:test]
+  script:
+    - pip-audit -r requirements-dev.txt
+
+build:images:
+  stage: build
+  image: docker:27-cli
+  services:
+    - docker:27-dind
+  needs: [php:security, python:security]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE/php:$CI_COMMIT_SHA" examples/php
+    - docker build -t "$CI_REGISTRY_IMAGE/python:$CI_COMMIT_SHA" examples/python
+    - docker push "$CI_REGISTRY_IMAGE/php:$CI_COMMIT_SHA"
+    - docker push "$CI_REGISTRY_IMAGE/python:$CI_COMMIT_SHA"
+
+deploy:staging:
+  stage: deploy
+  environment:
+    name: staging
+  needs: [build:images]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - ./scripts/ci/deploy.sh staging
+
+smoke:staging:
+  stage: smoke
+  needs: [deploy:staging]
+  script:
+    - ./scripts/ci/smoke.sh staging
+
+deploy:production:
+  stage: deploy
+  environment:
+    name: production
+  needs: [smoke:staging]
+  when: manual
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - ./scripts/ci/migrate.sh production
+    - ./scripts/ci/deploy.sh production
+
+smoke:production:
+  stage: smoke
+  needs: [deploy:production]
+  script:
+    - ./scripts/ci/smoke.sh production

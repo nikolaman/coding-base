@@ -1,0 +1,104 @@
+# Автоматический релиз при push в main:
+# - читает коммиты с последнего тега
+# - bump версии (patch по умолчанию, minor для feat:, major для BREAKING)
+# - обновляет VERSION, CHANGELOG.md, создаёт тег vX.Y.Z
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: "!contains(github.event.head_commit.message, '[skip release]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Определить и обновить версию
+        id: release
+        run: |
+          set -e
+
+          VERSION_FILE="VERSION"
+          CHANGELOG="CHANGELOG.md"
+          TODAY=$(date +%Y-%m-%d)
+
+          CURRENT=$(tr -d '[:space:]' < "$VERSION_FILE")
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+
+          if [ -z "$LAST_TAG" ]; then
+            NEW_VERSION="$CURRENT"
+            echo "skip_bump=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip_bump=false" >> "$GITHUB_OUTPUT"
+
+            if git rev-parse "$LAST_TAG" >/dev/null 2>&1; then
+              RANGE="${LAST_TAG}..HEAD"
+            else
+              RANGE="HEAD"
+            fi
+
+            BUMP="patch"
+            while IFS= read -r msg; do
+              [ -z "$msg" ] && continue
+              if echo "$msg" | grep -qiE 'BREAKING|^[a-z]+!:'; then
+                BUMP="major"
+                break
+              fi
+              if echo "$msg" | grep -qE '^feat(\([^)]+\))?:'; then
+                BUMP="minor"
+              fi
+            done < <(git log "$RANGE" --pretty=format:%s)
+
+            case "$BUMP" in
+              major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+              minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+              patch) PATCH=$((PATCH + 1)) ;;
+            esac
+
+            NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            echo "$NEW_VERSION" > "$VERSION_FILE"
+
+            {
+              echo ""
+              echo "## [${NEW_VERSION}] - ${TODAY}"
+              echo ""
+              echo "### Changed"
+              echo ""
+              git log "$RANGE" --pretty=format:'- %s' --reverse
+              echo ""
+            } >> "$CHANGELOG"
+          fi
+
+          echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "New version: ${NEW_VERSION}"
+
+      - name: Закоммитить, затегировать и запушить
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          SKIP_BUMP: ${{ steps.release.outputs.skip_bump }}
+        run: |
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [ "$SKIP_BUMP" = "false" ]; then
+            git add VERSION CHANGELOG.md
+            git commit -m "Release ${VERSION} [skip release]"
+            git push
+          fi
+
+          if ! git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            git tag -a "v${VERSION}" -m "Release ${VERSION}"
+            git push origin "v${VERSION}"
+          fi

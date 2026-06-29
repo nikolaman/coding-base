@@ -1,0 +1,156 @@
+// Jenkins Declarative Pipeline — шаблон для PHP/Python
+// Создай Multibranch Pipeline и укажи путь к этому Jenkinsfile
+
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        timeout(time: 10, unit: 'MINUTES')
+    }
+
+    environment {
+        COVERAGE_THRESHOLD = '80'
+        PHP_DIR = 'examples/php'
+        PYTHON_DIR = 'examples/python'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Lint') {
+            parallel {
+                stage('PHP Lint') {
+                    steps {
+                        dir(env.PHP_DIR) {
+                            sh 'composer install --no-interaction'
+                            sh 'composer lint'
+                        }
+                    }
+                }
+                stage('Python Lint') {
+                    steps {
+                        dir(env.PYTHON_DIR) {
+                            sh 'pip install -r requirements-dev.txt'
+                            sh 'pip install -e .'
+                            sh 'ruff check .'
+                            sh 'ruff format --check .'
+                            sh 'black --check .'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Static Analysis') {
+            parallel {
+                stage('PHP Analyse') {
+                    steps {
+                        dir(env.PHP_DIR) {
+                            sh 'composer analyse'
+                        }
+                    }
+                }
+                stage('Python Analyse') {
+                    steps {
+                        dir(env.PYTHON_DIR) {
+                            sh 'mypy src'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Test') {
+            parallel {
+                stage('PHP Test') {
+                    steps {
+                        dir(env.PHP_DIR) {
+                            sh 'mkdir -p build'
+                            sh 'composer test -- --coverage-clover build/coverage.xml'
+                        }
+                    }
+                }
+                stage('Python Test') {
+                    steps {
+                        dir(env.PYTHON_DIR) {
+                            sh 'pytest'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Security') {
+            parallel {
+                stage('PHP Audit') {
+                    steps {
+                        dir(env.PHP_DIR) {
+                            sh 'composer audit'
+                        }
+                    }
+                }
+                stage('Python Audit') {
+                    steps {
+                        dir(env.PYTHON_DIR) {
+                            sh 'pip-audit -r requirements-dev.txt'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh "docker build -t php-example:${env.GIT_COMMIT} ${env.PHP_DIR}"
+                sh "docker build -t python-example:${env.GIT_COMMIT} ${env.PYTHON_DIR}"
+            }
+        }
+
+        stage('Deploy Staging') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh './scripts/ci/deploy.sh staging'
+            }
+        }
+
+        stage('Smoke Tests') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh './scripts/ci/smoke.sh staging'
+            }
+        }
+
+        stage('Deploy Production') {
+            when {
+                branch 'main'
+            }
+            steps {
+                input message: 'Deploy to production?', ok: 'Deploy'
+                sh './scripts/ci/migrate.sh production'
+                sh './scripts/ci/deploy.sh production'
+                sh './scripts/ci/smoke.sh production'
+            }
+        }
+    }
+
+    post {
+        failure {
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_WEBHOOK_URL')]) {
+                sh './scripts/ci/notify-failure.sh "Jenkins pipeline failed"'
+            }
+        }
+    }
+}

@@ -1,0 +1,15 @@
+# Override для деплоя: один build — много сред (staging/prod)
+services:
+  php:
+    image: ${PHP_IMAGE:-ghcr.io/nikolaman/coding-base/php-example:latest}
+    environment:
+      APP_ENV: ${DEPLOY_ENV:-staging}
+
+  python:
+    image: ${PYTHON_IMAGE:-ghcr.io/nikolaman/coding-base/python-example:latest}
+    environment:
+      APP_ENV: ${DEPLOY_ENV:-staging}
+
+  db:
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}

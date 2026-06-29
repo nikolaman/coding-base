@@ -1,0 +1,2 @@
+# Продакшен-зависимости (пинning через pip-compile: pip-compile pyproject.toml -o requirements.txt)
+# Пример пустого приложения — зависимости добавляй по мере роста проекта

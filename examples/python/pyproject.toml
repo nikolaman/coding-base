@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coding-base-python-example"
+version = "0.1.0"  # каноническая версия — корневой VERSION; синхронизируется release workflow
+description = "Минимальный Python-пример для CI/CD pipeline"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "black>=25.1.0",
+    "mypy>=1.15.0",
+    "pip-audit>=2.9.0",
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.11.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["app"]
+mypy_path = "src"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=app.calculator --cov-report=term-missing --cov-report=xml:build/coverage.xml --cov-fail-under=80"
+
+[tool.coverage.run]
+source = ["app/calculator.py"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true

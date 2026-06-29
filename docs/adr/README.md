@@ -1,14 +1,5 @@
-# ADR
-
-Architecture Decision Records — журнал архитектурных решений.
-
 | ADR | Статус | Название |
 |-----|--------|----------|
 | 0000 | template | Шаблон ADR |
-
-## Как добавить
-
-1. Скопируй `0000-template.md` → `NNNN-название.md`
-2. Заполни секции
-3. Обнови таблицу выше
-4. Используй скилл `adr-documentation`
+| 0001 | accepted | CI/CD pipeline для PHP и Python |
+| 0002 | accepted | Автоматическое SemVer-версионирование |

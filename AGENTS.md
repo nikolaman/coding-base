@@ -4,50 +4,39 @@
 
 ## Workflow
 
-Золотое правило вайб-кодинга:
-
-> AI пишет быстрее, чем думает. Думай быстрее, чем принимаешь код.
-
 ```
 Задача → План → Проверка → Код → Тесты + review → Коммит
 ```
 
-## Перед началом работы
+## CI/CD
 
-1. Прочитай `docs/BACKLOG.md` — текущая задача и WIP
-2. Прочитай последнюю запись `docs/SESSION-LOG.md`
-3. Используй скилл `vibe-coding-session` для нетривиальных задач
+Полный стандарт: `docs/ci-cd/README.md`, ADR-0001.
 
-## Правила (.cursor/rules/)
+## Версионирование
 
-| Правило | Содержание |
-|---------|------------|
-| solo-workflow | Backlog, WIP-лимит, ветки |
-| git-discipline | Маленькие коммиты, conventional commits |
-| code-quality | KISS, YAGNI, тесты, рефакторинг |
-| vibe-coding-core | Золотое правило, размер изменений |
-| ai-collaboration | Контекст, review, понимание кода |
-| infra-ops | CI, Docker, бэкапы, аудит |
+ADR-0002. `VERSION` + `release.yml` + Conventional Commits. Скилл: `auto-versioning`.
 
-## Скиллы (.cursor/skills/)
+## Скиллы
 
 | Скилл | Когда |
 |-------|-------|
 | vibe-coding-session | Начало задачи, крупные изменения |
 | solo-backlog | Планирование, приоритизация |
 | adr-documentation | Архитектурные решения |
-| weekly-tech-audit | Еженедельная проверка проекта |
+| ci-cd-php-python | CI/CD, pipeline, деплой |
+| auto-versioning | Версии, релизы, CHANGELOG, Conventional Commits |
+| weekly-tech-audit | Еженедельная проверка |
 
 ## Ограничения
 
 - WIP: максимум 1–2 задачи
 - Изменения: 100–300 строк за шаг
 - Коммиты: только по явной просьбе
-- Не начинать новую задачу без завершения текущей
+- Секреты: только CI Variables/Secrets
 
 ## Документация
 
+- CI/CD: `docs/ci-cd/README.md`
 - Backlog: `docs/BACKLOG.md`
 - Сессии: `docs/SESSION-LOG.md`
 - ADR: `docs/adr/`
-- Архитектура: `docs/architecture/README.md`

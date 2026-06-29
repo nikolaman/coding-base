@@ -1,0 +1,167 @@
+name: Reusable PHP Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Каталог PHP-проекта
+        required: false
+        type: string
+        default: examples/php
+      coverage-threshold:
+        description: Минимальный порог покрытия
+        required: false
+        type: number
+        default: 80
+      run-build:
+        description: Собирать Docker-образ
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      image-tag:
+        description: Тег собранного образа
+        value: ${{ jobs.build.outputs.image-tag }}
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: false
+
+env:
+  COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+
+jobs:
+  lint:
+    name: PHP / Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-php
+        with:
+          working-directory: ${{ inputs.working-directory }}
+      - run: composer lint
+
+  static-analysis:
+    name: PHP / Static Analysis
+    runs-on: ubuntu-latest
+    needs: lint
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-php
+        with:
+          working-directory: ${{ inputs.working-directory }}
+      - run: composer analyse
+
+  test:
+    name: PHP / Tests
+    runs-on: ubuntu-latest
+    needs: static-analysis
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-php
+        with:
+          working-directory: ${{ inputs.working-directory }}
+      - run: mkdir -p build
+      - run: composer test -- --coverage-clover build/coverage.xml
+      - name: Enforce coverage threshold
+        run: |
+          python3 - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          threshold = float("${{ env.COVERAGE_THRESHOLD }}")
+          root = ET.parse("build/coverage.xml").getroot()
+          metrics = root.find("project/metrics")
+          if metrics is None:
+              sys.exit("coverage.xml missing project metrics")
+          covered = float(metrics.attrib["coveredstatements"])
+          total = float(metrics.attrib["statements"])
+          pct = 0 if total == 0 else covered / total * 100
+          print(f"Coverage: {pct:.2f}% (threshold {threshold}%)")
+          sys.exit(0 if pct >= threshold else 1)
+          PY
+        working-directory: ${{ inputs.working-directory }}
+
+  security:
+    name: PHP / Security
+    runs-on: ubuntu-latest
+    needs: test
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-php
+        with:
+          working-directory: ${{ inputs.working-directory }}
+      - name: Composer audit
+        run: composer audit --no-dev || composer audit
+
+  build:
+    name: PHP / Build
+    runs-on: ubuntu-latest
+    needs: security
+    if: inputs.run-build
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read VERSION
+        id: ver
+        run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+      - name: Copy VERSION into build context
+        run: cp VERSION "${{ inputs.working-directory }}/VERSION"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/php-example
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.ver.outputs.version }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.working-directory }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/${{ github.repository }}/php-example:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom-php.spdx.json
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-php
+          path: sbom-php.spdx.json
+
+  notify-failure:
+    name: PHP / Notify
+    runs-on: ubuntu-latest
+    needs: [lint, static-analysis, test, security]
+    if: failure()
+    steps:
+      - uses: actions/checkout@v4
+      - name: Notify
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          MESSAGE: PHP pipeline failed in ${{ github.repository }} (${{ github.ref_name }})
+        run: ./scripts/ci/notify-failure.sh "$MESSAGE"
