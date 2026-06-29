@@ -114,7 +114,8 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ steps.ver.outputs.version }}
-      - uses: docker/build-push-action@v6
+      - id: build
+        uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.working-directory }}
           push: true
@@ -125,7 +126,7 @@ jobs:
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/${{ github.repository }}/python-example:${{ github.sha }}
+          image: ${{ steps.build.outputs.digest }}
           format: spdx-json
           output-file: sbom-python.spdx.json
       - name: Upload SBOM
