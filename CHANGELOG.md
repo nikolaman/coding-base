@@ -7,3 +7,9 @@
 ### Added
 
 - Начальная версия с автоматическим версионированием (VERSION + GitHub Actions + Conventional Commits).
+
+## [1.0.1] - 2026-06-29
+
+### Changed
+
+- fix: починить CI — PHP 8.4 и обновление уязвимых Python-зависимостей
