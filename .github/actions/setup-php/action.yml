@@ -5,7 +5,7 @@ inputs:
   php-version:
     description: Версия PHP
     required: false
-    default: "8.3"
+    default: "8.4"
   working-directory:
     description: Каталог с composer.json
     required: true

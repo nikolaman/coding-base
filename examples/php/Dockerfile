@@ -5,7 +5,7 @@ WORKDIR /app
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
-FROM php:8.3-cli-alpine AS runtime
+FROM php:8.4-cli-alpine AS runtime
 WORKDIR /app
 
 RUN addgroup -g 1000 app && adduser -u 1000 -G app -D app
