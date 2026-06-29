@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Раскомментируй и адаптируй под стек проекта:
+
+      # --- Node.js ---
+      # - uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '20'
+      #     cache: 'npm'
+      # - run: npm ci
+      # - run: npm run lint
+      # - run: npm test
+
+      # --- Python ---
+      # - uses: actions/setup-python@v5
+      #   with:
+      #     python-version: '3.12'
+      # - run: pip install -r requirements.txt
+      # - run: pytest
+
+      # --- Go ---
+      # - uses: actions/setup-go@v5
+      #   with:
+      #     go-version: '1.22'
+      # - run: go test ./...
+
+      - name: Placeholder — настрой CI под свой стек
+        run: echo "CI template ready. Uncomment steps above."
